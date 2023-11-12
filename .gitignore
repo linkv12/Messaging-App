@@ -1,4 +1,4 @@
-# dotFolder
+# dotFolder & cache
 .venv/
 .vscode/
 __pycache__/
