@@ -1,6 +1,7 @@
 # dotFolder
 .venv/
-
+.vscode/
+__pycache__/
 
 # Random Files
 test.py
