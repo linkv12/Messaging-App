@@ -1,0 +1,11 @@
+Source  : https://github.com/macsnoeren/python-p2p-network
+By      : Author: Maurice Snoeren <macsnoeren(at)gmail.com>
+
+Changes : Extends node & nodeconnection module to suit spesific purpose using NetworkHandler class
+          Rewrite code for understanding without implementing some function in node & nodeconnection
+          Remove compression from NodeConnection class, since it will not be used probably
+          Some function name changed
+          Some function added to Node class
+          Prevent RuntimeError self.node_inbound to self.node_inbound.copy()
+          Prevent RuntimeError self.node_outbound to self.node_outbound.copy()
+          
