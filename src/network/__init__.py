@@ -12,6 +12,10 @@ __all__ = [
 ]
 
 
+# from network import node
+# from network import nodeconnection
+# from network import networkhandler
+
 from .node import Node
 from .nodeconnection import NodeConnection
 from .networkhandler import NetworkHandler

@@ -1,13 +1,11 @@
-from math import log
 import threading
 import curses
 import time
-from turtle import color
 
 
 # Why threaded ?
 # Need to keep waiting for input yeah
-class TermUi(threading.Thread):
+class TerminalUi(threading.Thread):
     def __init__(self, callback):
         self.callback = callback
         self.terminate_flag = threading.Event()
@@ -25,8 +23,8 @@ class TermUi(threading.Thread):
             "[uname][12:12]: " + "Henlo" * 28 + "123",
             "[hehee][12:12]: jello",
             "[uname][12:13]: " + "yeyoo" * 28 + "123",
-        ]
-        super(TermUi, self).__init__()
+        ] * 20
+        super(TerminalUi, self).__init__()
 
     # * Initialize
     def init_color(self):
@@ -91,6 +89,14 @@ class TermUi(threading.Thread):
 
     # * UPDATE
     def update_log(self, log_window, testing=False):
+        """
+        Paint self.text_buffer to log_window object
+
+        :param self:        Attributes instance
+        :param log_window:  curses.window instance on which data will be written
+        :param testing:     bool value, wheter it's a test
+        """
+
         max_y, max_x = log_window.getmaxyx()
         max_y = max_y - 1
         # print("Log Window max: {}, {}".format(max_x, max_y))
@@ -138,7 +144,7 @@ class TermUi(threading.Thread):
                         curr_line = curr_line - 1
 
             log_window.refresh()
-            self.prev_text_buffer = self.text_buffer[:]
+            self.prev_text_buffer = self.text_buffer.copy()
 
     def update_fps_counter(self, win, fps: float):
         """
@@ -169,6 +175,85 @@ class TermUi(threading.Thread):
         win.clear()
         win.addstr(data)
         win.refresh()
+
+    def update_server_info(self, win, info: str = "Offline", location=(2, 2)):
+        """
+        Paint our server status, in an easily readable format
+        Occupy from col 2 - 34 on row 2
+                        32 col
+
+        :param self:        Attributes instance
+        :param win:         log_win_border
+        :param info:        str to paint, default: offline
+        :param location:    location of row,col in win to paint on
+        """
+        max_len = 32
+
+        y, x = location
+        default_erasure = " " * max_len
+        win.addnstr(y, x, default_erasure, max_len)
+        if info.startswith("Offline"):
+            attr = curses.color_pair(1)
+            win.addnstr(y, x, " " + info + " ", max_len, attr)
+            win.refresh()
+        elif info.startswith("Online"):
+            attr = curses.color_pair(0) | curses.A_REVERSE
+            ip_info = info[7:] + " "
+            ip_loc = x + 8
+            win.addnstr(y, x, " " + info, 8, curses.color_pair(2))
+            win.addnstr(y, ip_loc, ip_info, max_len - 8, attr)
+            win.refresh()
+        else:
+            win.addnstr(y, x, info, max_len)
+            win.refresh()
+
+    def update_peer_info(self, win, info=None, location=(2, 37)):
+        """
+        Paint our connected peer id, in an easily readable format
+
+        Occupy from col 37 - 58 on row 2
+                        21 col
+
+        :param self:        Attributes instance
+        :param win:         log_win_border
+        :param info:        str to paint, max 5 char, default: None
+        :param location:    location of row,col in win to paint on
+        """
+        y, x = location
+        # since uname limited to 5, hardcoded
+        max_len = 21
+
+        erasure = " " * max_len
+
+        if info is not None:
+            win.addnstr(y, x, erasure, max_len)
+            info = " Connected with " + info[:5]
+            win.addnstr(y, x, info, max_len)
+            win.refresh()
+
+    def update_user_info(self, win, info=None, location=(0, 37)):
+        """
+        Paint our id, in an easily readable format
+
+        Occupy from col 37 - 30 on row 0
+                        23 col
+
+        :param self:        Attributes instance
+        :param win:         log_win_border
+        :param info:        str to paint, max 5 char, default: None
+        :param location:    location of row,col in win to paint on
+        """
+        y, x = location
+        # since uname limited to 5, hardcoded
+        max_len = 22
+
+        erasure = " " * max_len
+        win.addnstr(y, x, erasure, max_len)
+        if info is not None:
+            win.addnstr(y, x, erasure, max_len)
+            info = " Username:      " + info[:5] + " "
+            win.addnstr(y, x, info, max_len, curses.color_pair(0) | curses.A_REVERSE)
+            win.refresh()
 
     # * Threading Function
     def stop(self):
@@ -215,21 +300,38 @@ class TermUi(threading.Thread):
         log_window_border.addstr(
             0, max_x - 25, " DON'T Resize Terminal ", curses.color_pair(1)
         )
+
         log_window_border.refresh()
 
         # * Log window info
         log_max_y, log_max_x = log_window_border.getmaxyx()
-        log_max_y = log_max_y - 3
+        log_max_y = log_max_y - 4
         log_max_x = log_max_x - 6
-        log_window = curses.newwin(log_max_y, log_max_x, 2, 3)
+        log_window = curses.newwin(log_max_y, log_max_x, 3, 3)
 
         # * user_input window
         _, user_max_x = user_input_window_border.getmaxyx()
         user_input_window = curses.newwin(1, user_max_x - 4, max_y - 2, 3)
         user_input_window.timeout(10)
 
+        # * expose terminal window to outside
+        self.user_input_window = user_input_window
+        self.log_window_border = log_window_border
+        self.log_window = log_window
+
         # * Initial fps
         self.update_fps_counter(log_window_border, 0)
+
+        # * Initial Sever status
+        self.update_server_info(self.log_window_border)
+
+        # * Test Peer update
+        # self.update_server_info(
+        #     self.log_window_border, info="Online @127:127:127:127:65000"
+        # )
+        # self.update_peer_info(self.log_window_border, info="ULAN5")
+        # self.update_user_info(self.log_window_border, info="Mundi")
+
         # * HERE MAIN
         while not self.terminate_flag.is_set():
             start_time = time.time()
@@ -287,12 +389,19 @@ class TermUi(threading.Thread):
             user_input_data = "".join(self.user_input_buffer).strip()
             self.user_input(user_input_data)
             self.user_input_buffer = []
-            #! TEMPORARY
+            # #! TEMPORARY
             self.text_buffer.append(user_input_data)
 
         elif char == 8 or char == 127 or char == curses.KEY_BACKSPACE:
             # Backspace
             self.user_input_buffer = self.user_input_buffer[:-1]
+
+    # * Utils
+    def beep(self):
+        """
+        Make a beep sound, used on new message arrived
+        """
+        curses.beep()
 
     # ? CALLBACK
     def user_input(self, u_input: str):
@@ -311,9 +420,9 @@ if __name__ == "__main__":
     def henlo(t, u):
         print(t, ": ", u)
 
-    x = TermUi(callback=henlo)
+    x = TerminalUi(callback=henlo)
     x.start()
 
-    time.sleep(6)
+    time.sleep(15)
 
     x.stop()

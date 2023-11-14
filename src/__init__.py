@@ -1,3 +1,4 @@
 __main__ = "src"
 
-from .network import __all__
+from src.network import *
+from src.termui import *

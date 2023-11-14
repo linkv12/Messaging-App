@@ -1,13 +1,15 @@
 import datetime
 import threading
+import time
 import uuid
-
 
 from .node import Node
 
 # ? Is threading.Thread even needed ?
 # ? Our upperclass, main_controller can send using it function
 # ? The message will be passed through callback, what it need to be stay on ?
+
+# ? Yeah, need to be threaded, I tried
 
 
 class NetworkHandler(threading.Thread):
@@ -109,12 +111,12 @@ class NetworkHandler(threading.Thread):
 
         :param self:        Instances attributes
         """
-
-        a = 1
+        elapsed_time = 0
         # * Start node
         self.node.start()
         while not self.terminate_flag.is_set():
-            a = 1
+            time.sleep(1)
+            elapsed_time = elapsed_time + 1
 
         # * Stopping node
         self.node.stop()
