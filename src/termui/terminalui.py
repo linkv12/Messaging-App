@@ -9,7 +9,9 @@ class TerminalUi(threading.Thread):
     def __init__(self, callback):
         self.callback = callback
         self.terminate_flag = threading.Event()
-        self.testing = True
+
+        self.show_fps = False
+        self.testing = False
 
         self.text_buffer = []
         self.prev_text_buffer = []
@@ -154,13 +156,13 @@ class TerminalUi(threading.Thread):
         :param win:     curses.window instance, should be log_window_border
         :param fps:     Amount of loop per second
         """
-
-        _, max_x = win.getmaxyx()
-        erasure = "           "
-        win.addstr(1, max_x - 12, erasure)
-        fps_formating = "{:.6f}".format(fps)[:6]
-        win.addstr(1, max_x - 14, "FPS: {}".format(fps_formating))
-        win.refresh()
+        if self.show_fps:
+            _, max_x = win.getmaxyx()
+            erasure = "           "
+            win.addstr(1, max_x - 12, erasure)
+            fps_formating = "{:.6f}".format(fps)[:6]
+            win.addstr(1, max_x - 14, "FPS: {}".format(fps_formating))
+            win.refresh()
 
     def update_user_input_window(self, win, data=""):
         """
@@ -224,12 +226,12 @@ class TerminalUi(threading.Thread):
         max_len = 21
 
         erasure = " " * max_len
+        win.addnstr(y, x, erasure, max_len)
 
         if info is not None:
-            win.addnstr(y, x, erasure, max_len)
             info = " Connected with " + info[:5]
             win.addnstr(y, x, info, max_len)
-            win.refresh()
+        win.refresh()
 
     def update_user_info(self, win, info=None, location=(0, 37)):
         """
@@ -254,6 +256,13 @@ class TerminalUi(threading.Thread):
             info = " Username:      " + info[:5] + " "
             win.addnstr(y, x, info, max_len, curses.color_pair(0) | curses.A_REVERSE)
             win.refresh()
+
+    # * text_buffer manipulation
+    def pop_text_buffer(self):
+        self.text_buffer.pop()
+
+    def put_text_buffer(self, data: str):
+        self.text_buffer.append(data)
 
     # * Threading Function
     def stop(self):
@@ -295,11 +304,12 @@ class TerminalUi(threading.Thread):
         )
 
         # * draw info
-        info = "Connect: !conn  ||  Exit: !exit"
+        info = "Connect: !conn  ||  Exit: !quit"
         log_window_border.addstr(1, 3, info)
-        log_window_border.addstr(
-            0, max_x - 25, " DON'T Resize Terminal ", curses.color_pair(1)
-        )
+
+        caution = " DON'T Resize Terminal "
+
+        log_window_border.addstr(max_y - 4, max_x - 25, caution, curses.color_pair(1))
 
         log_window_border.refresh()
 
@@ -390,7 +400,7 @@ class TerminalUi(threading.Thread):
             self.user_input(user_input_data)
             self.user_input_buffer = []
             # #! TEMPORARY
-            self.text_buffer.append(user_input_data)
+            # self.text_buffer.append(user_input_data)
 
         elif char == 8 or char == 127 or char == curses.KEY_BACKSPACE:
             # Backspace

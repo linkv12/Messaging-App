@@ -13,16 +13,18 @@ from .node import Node
 
 
 class NetworkHandler(threading.Thread):
-    def __init__(self, host: str, port: str, callback=None, id=None):
+    def __init__(self, host: str, port: str, callback=None, id=None, max_connection=1):
         """
         Network Handler constructor
 
-        :param self:        Attribute instances
-        :param host:        IP address for networking
-        :param port:        Port for networking
-        :param callback:    Function to handle output from NetworkHandler
-        :param id:          ID for network handler
+        :param self:            Attribute instances
+        :param host:            IP address for networking
+        :param port:            Port for networking
+        :param callback:        Function to handle output from NetworkHandler
+        :param id:              ID for network handler
+        :param max_connection:  max_connection to have
         """
+
         self.debug = True
         self.terminate_flag = threading.Event()
 
@@ -32,9 +34,10 @@ class NetworkHandler(threading.Thread):
             self.id = str(id)
         else:
             self.id = self.generate_random_id()
-
         self.callback = callback
 
+        self.max_connection = max_connection
+        self.current_connection = 0
         self.node = self.create_new_node()
 
         # id + nodeConnection
@@ -67,6 +70,18 @@ class NetworkHandler(threading.Thread):
         return Node(
             host=self.host, port=self.port, id=self.id, callback=self.node_callback
         )
+
+    def send_to_node(self, data, node):
+        """
+        Send data to node
+
+        :param self:        Instances attributes
+        :param data:        Data wanted to be send
+        :param node:        NodeConnection
+        """
+
+        if node.id in self.conn_info.keys():
+            self.node.send_to_node(n=node, data=data)
 
     def send_to_all_nodes(self, data):
         """
@@ -155,16 +170,13 @@ class NetworkHandler(threading.Thread):
             case "server_started":
                 dest_id = main_node.id
                 source_id = "sys"
-                data = "{}: {} @{}:{}".format(
-                    callback_type, main_node.id, main_node.host, main_node.port
-                )
+                data = "{} @{}:{}".format(main_node.id, main_node.host, main_node.port)
 
             # * When node connected & diconnected with us
             case "outbound_node_connected":
                 dest_id = node_connection.id
                 source_id = main_node.id
-                data = "{}: {} <- {} @{}:{}".format(
-                    callback_type,
+                data = "{} -> {} @{}:{}".format(
                     main_node.id,
                     node_connection.id,
                     node_connection.host,
@@ -175,8 +187,7 @@ class NetworkHandler(threading.Thread):
             case "outbound_node_disconnected":
                 dest_id = node_connection.id
                 source_id = main_node.id
-                data = "{}: {} <# {} @{}:{}".format(
-                    callback_type,
+                data = "{} #> {} @{}:{}".format(
                     main_node.id,
                     node_connection.id,
                     node_connection.host,
@@ -188,8 +199,7 @@ class NetworkHandler(threading.Thread):
             case "inbound_node_connected":
                 dest_id = main_node.id
                 source_id = node_connection.id
-                data = "{}: {} -> {} @{}:{}".format(
-                    callback_type,
+                data = "{} <- {} @{}:{}".format(
                     main_node.id,
                     node_connection.id,
                     node_connection.host,
@@ -200,8 +210,7 @@ class NetworkHandler(threading.Thread):
             case "inbound_node_disconnected":
                 dest_id = main_node.id
                 source_id = node_connection.id
-                data = "{}: {} #> {} @{}:{}".format(
-                    callback_type,
+                data = "{} <# {} @{}:{}".format(
                     main_node.id,
                     node_connection.id,
                     node_connection.host,
@@ -213,6 +222,7 @@ class NetworkHandler(threading.Thread):
             case "node_message":
                 dest_id = main_node.id
                 source_id = node_connection.id
+
                 data = data
 
             # * node is stopping
