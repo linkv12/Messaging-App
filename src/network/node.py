@@ -214,7 +214,13 @@ class Node(threading.Thread):
 
     # * Sending Logic:
     def send_to_node(self, n: NodeConnection, data):
-        """"""
+        """
+        Sending data to n
+
+        :param self:            Attributes Instance
+        :param n:               NodeConnection instances, that data need to go
+        :param data:            Data to send
+        """
         if n in self.node_inbound or n in self.node_outbound:
             n.send(data=data)
         else:

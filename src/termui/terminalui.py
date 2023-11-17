@@ -7,17 +7,29 @@ import time
 # Need to keep waiting for input yeah
 class TerminalUi(threading.Thread):
     def __init__(self, callback):
+        """
+        Terminal UI constructor
+
+        :param self:        Attributes Instance
+        :param callback:    Callback to event handler
+        """
+        # Callback Function & termination_flag
         self.callback = callback
         self.terminate_flag = threading.Event()
 
+        # fps & testing flag
         self.show_fps = False
         self.testing = False
 
+        # Text Buffer to paint
+        # Prev Text Buffer that painted
         self.text_buffer = []
         self.prev_text_buffer = []
 
+        # Temporary storage for user key input
         self.user_input_buffer = []
 
+        # Dummy data for testing
         self.dummy_log_data = [
             "[ sys ][12:12]: testing",
             "[uname][12:13]: " + "jello" * 28 + "123" + "jello" * 28 + "123",
@@ -26,6 +38,8 @@ class TerminalUi(threading.Thread):
             "[hehee][12:12]: jello",
             "[uname][12:13]: " + "yeyoo" * 28 + "123",
         ] * 20
+
+        # Threading, init
         super(TerminalUi, self).__init__()
 
     # * Initialize
@@ -259,9 +273,20 @@ class TerminalUi(threading.Thread):
 
     # * text_buffer manipulation
     def pop_text_buffer(self):
+        """
+        Remove last element from self.text_buffer
+
+        :param self:    Attributes instance
+        """
         self.text_buffer.pop()
 
     def put_text_buffer(self, data: str):
+        """
+        Add str to the end of self.text_buffer
+
+        :param self:    Attributes instance
+        :param data:    String to add
+        """
         self.text_buffer.append(data)
 
     # * Threading Function
@@ -410,6 +435,8 @@ class TerminalUi(threading.Thread):
     def beep(self):
         """
         Make a beep sound, used on new message arrived
+
+        :param self:    Attributes instance
         """
         curses.beep()
 
@@ -421,18 +448,4 @@ class TerminalUi(threading.Thread):
         :param self:    Attributes instance
         :param u_input: User input in str
         """
-        func_name = "user_input"
         self.callback("user_input", u_input)
-
-
-if __name__ == "__main__":
-
-    def henlo(t, u):
-        print(t, ": ", u)
-
-    x = TerminalUi(callback=henlo)
-    x.start()
-
-    time.sleep(15)
-
-    x.stop()

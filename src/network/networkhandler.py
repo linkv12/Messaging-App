@@ -137,13 +137,19 @@ class NetworkHandler(threading.Thread):
         self.node.stop()
 
     def connect_to_node(self, host, port):
-        # *
+        """
+        COnnect with other node with host and port
+
+        :param self:            Attributes instance
+        :param host:            IP address to connect
+        :param port:            Port to connect
+        """
         self.node.connect_with_node(host=host, port=port, reconnect=True)
 
     # * Callback handler
     def node_callback(self, callback_type, main_node, node_connection, data):
         """
-
+        Node callback handler, the function for handling callback on Node and NodeConnection class
         Style guide :
             : callback_type         : Type of callback
             : source_id             : where is started us, other node, or sys
@@ -157,11 +163,7 @@ class NetworkHandler(threading.Thread):
         :param data:                Data that passed (str, dict or bytes)
         """
 
-        #   Logic Idea
-        #       On connect, inbound or outbound -> have dict with key = id, and val = NodeConnection
-        #
-        #
-
+        # Daemon not sent to handler
         daemon_callback = ["node_send_success"]
 
         # *> Match Case for data processing
@@ -252,8 +254,3 @@ class NetworkHandler(threading.Thread):
         :return:        random :type:str
         """
         return str(uuid.uuid4())[:8]
-
-
-if __name__ == "__main__":
-    x = NetworkHandler("127.0.0.1", 5069, callback=None, id=None)
-    y = NetworkHandler("127.0.0.1", 5069, callback=None, id=None)
