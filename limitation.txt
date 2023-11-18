@@ -1,1 +1,7 @@
 cant input:     ]}'"
+
+!conn -> !encrypt
+
+Note :
+Supported Encryption : 
+    eg : ElGamal
