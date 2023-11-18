@@ -4,6 +4,8 @@ import random
 import threading
 import time
 import uuid
+
+from src.encrypt.elgamal import ElGamal
 from src.termui import TerminalUi
 from src.network import NetworkHandler
 
@@ -44,7 +46,18 @@ class MainController(threading.Thread):
         self.peer_connection = None
 
         # * Encryption
+        self.is_encrypted = False
+        self.encryption_message_flag = None
         self.encryption = None
+        self.has_sent_pub_key = False
+
+        self.peer_encryption_info = dict()  # peer_id, peer_encryption, peer_pubkey
+        # peer_encryption object only for encrypt
+
+        # * Supported Encryption
+        self.pub_key_ending_bytes = {"eg": bytes("5eg", "UTF-16")}
+        self.pub_key_unpacking = {"eg": ElGamal.unpack_public_key}
+        self.encryption_function = {"eg": ElGamal.pack_to_bytes_message}
 
         # * Other component
         # * Terminal_UI -> User Interface
@@ -97,17 +110,50 @@ class MainController(threading.Thread):
             else:
                 # not valid
                 self.add_data_buffer(" sys ", "Invalid input, makesure ip:port")
+
+        elif user_input.startswith("!encrypt"):
+            encryption_candidate = user_input.split("!encrypt")[-1].strip()
+            match encryption_candidate:
+                case "eg":
+                    self.is_encrypted = True
+                    self.encryption = ElGamal()
+                    self.encryption_message_flag = (
+                        self.encryption.encrypted_message_bytes
+                    )
+
+                    # send pub_key to peer
+                    self.add_data_buffer(" sys ", "Using ElGamal encryption")
+                case _:
+                    self.add_data_buffer(
+                        source=" sys ",
+                        message="{} is not valid encryption".format(
+                            encryption_candidate
+                        ),
+                    )
+
         else:
             # sending it to other if we have connection together and are online
             timestamp = datetime.datetime.now()
             self.add_data_buffer(
                 source=self.username, message=user_input, timestamp=timestamp
             )
-            if self.is_online and self.have_peer:
-                # send it to peer
-                # send  content
-                if self.encryption == None:
+
+            online_status = self.is_online and self.have_peer
+            if online_status and self.is_encrypted and not self.has_sent_pub_key:
+                public_key = self.encryption.pack_public_key()
+                self.send_to_peer(public_key, datetime.datetime.now())
+                self.has_sent_pub_key = True
+
+            if online_status:
+                if self.peer_id not in self.peer_encryption_info.keys():
                     self.send_to_peer(user_input, timestamp)
+                else:
+                    # which mean other have use encryption
+                    peer_pub_key = self.peer_encryption_info[self.peer_id]["public_key"]
+                    encrypt_message = self.peer_encryption_info[self.peer_id][
+                        "encryption_function"
+                    ](user_input, peer_pub_key)
+                    self.send_to_peer(encrypt_message, timestamp)
 
                 # if encryption != None , then process it accordingly
 
@@ -178,6 +224,46 @@ class MainController(threading.Thread):
             # if content != str, maybe encrpted ?????
             # content == bytes than def encrypted ,
             # either message, or pubkey
+            elif isinstance(data["content"], bytes):
+                # what is this either pubkey or enc, message
+                # check if it key or mess
+
+                if self.encryption_message_flag is not None:
+                    is_message_for_us = data["content"].endswith(
+                        self.encryption_message_flag
+                    )
+                else:
+                    is_message_for_us = False
+                # are we use encryption ?
+                if self.is_encrypted and is_message_for_us:
+                    # check ending
+
+                    ciphers = self.encryption.unpack_encrypted_message(data["content"])
+                    message = self.encryption.decrypt(ciphers)
+
+                    self.add_data_buffer(
+                        source=source_id,
+                        message=message,
+                        timestamp=datetime.datetime.fromisoformat(data["timestamp"]),
+                    )
+                else:
+                    # probably pubkey exchange
+                    encryption_type = None
+                    for type, bytes_value in self.pub_key_ending_bytes.items():
+                        if data["content"].endswith(bytes_value):
+                            encryption_type = type
+
+                    # unpack pub_key
+                    pub_key = self.pub_key_unpacking[encryption_type](data["content"])
+
+                    # so we now what our peer use as encryption
+                    self.peer_encryption_info[source_id] = {
+                        "public_key": pub_key,
+                        "encryption_function": self.encryption_function[
+                            encryption_type
+                        ],
+                    }
+
             self.print_data_routine()
 
     # * Validation
