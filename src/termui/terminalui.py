@@ -329,7 +329,7 @@ class TerminalUi(threading.Thread):
         )
 
         # * draw info
-        info = "Connect: !conn  ||  Exit: !quit"
+        info = "Connect: !conn  ||  Exit: !quit  || Encryption: !encrypt"
         log_window_border.addstr(1, 3, info)
 
         caution = " DON'T Resize Terminal "
