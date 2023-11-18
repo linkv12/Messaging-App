@@ -10,11 +10,17 @@ from src.network import NetworkHandler
 
 class MainController(threading.Thread):
     def __init__(self) -> None:
-        # self.terminal_ui = TerminalUi()
+        """
+        Constructor for MainController class
 
+        :param self:    Attritbutes Instance
+        """
+
+        # * Counter for the amount
+        # * input from user
         self.counter = 0
 
-        self.is_port_valid = False
+        # * Termination flag, stopping thread
         self.terminate_flag = threading.Event()
 
         # * data_buffer  -> Unsorted list, data append
@@ -26,28 +32,37 @@ class MainController(threading.Thread):
         self.text_buffer = []
         self.text_buffer_update = False
 
-        # * Network flag & networking
-        self.network_handler = None
+        # * Network flag & networking info
         self.is_online = False
+        self.is_port_valid = False
         self.have_peer = False
         self.host = socket.gethostbyname(socket.gethostname())
         self.port = None
 
-        # * Peer
+        # * Peer Info
         self.peer_id = None
         self.peer_connection = None
 
         # * Encryption
         self.encryption = None
-        # * lock send_to_view
-        self.data_storage_lock = False
 
+        # * Other component
+        # * Terminal_UI -> User Interface
+        # * Network Handlet -> Networking using socket
         self.terminal_ui = TerminalUi(callback=self.user_input_handler)
+        self.network_handler = None
 
         super(MainController, self).__init__()
 
     # * PROCESS USER INPUT
     def process_user_input(self, user_input: str):
+        """
+        Process user input
+
+        :param self:        Attributes Instance
+        :param user_input:  Input from user
+        """
+
         if user_input == "!quit":
             self.add_data_buffer(" sys ", "Closing....")
             self.stop()
@@ -97,6 +112,15 @@ class MainController(threading.Thread):
                 # if encryption != None , then process it accordingly
 
     def process_username(self, username: str) -> str:
+        """
+        Process user input which presumed to be username
+
+        :param self:        Attributes Instance
+        :param username:    String input from user, assumed username
+
+        :return: valid username, 5 char and no special char
+        """
+
         invalid_chars = "'\"\\:@#$!~%^&*()_+"
         for char_ in invalid_chars:
             username = username.replace(char_, "")
@@ -108,6 +132,14 @@ class MainController(threading.Thread):
         return username
 
     def process_port(self, port) -> int:
+        """
+        Process user input which presumed to be port
+
+        :param self:        Attributes Instance
+        :param port:        String input from user, assumed as port
+
+        :return: valid port, between 20000 and 21000
+        """
         try:
             port = int(port)
             if not (20000 <= port <= 21000):
@@ -118,17 +150,34 @@ class MainController(threading.Thread):
         return port
 
     def process_network_message(self, source_id, dest_id, data):
+        """
+        Process data from our peer
+
+        :param self:            Attributes Instance
+        :param source_id:       Id of our peer, the sender
+        :param dest_id:         Our Id, the receiver
+        :param data:            Data that is sent
+        """
+
         if isinstance(data, bytes):
             # further processing, for example encryption
             pass
         elif isinstance(data, str):
             self.add_data_buffer(source=source_id, message=str(data))
+
+        # Default send to peer data type
+        # but some error might occur and recv other type
         elif isinstance(data, dict):
-            self.add_data_buffer(
-                source=source_id,
-                message=data["content"],
-                timestamp=datetime.datetime.fromisoformat(data["timestamp"]),
-            )
+            # anticipate if data send to peer is str or other
+            if isinstance(data["content"], str):
+                self.add_data_buffer(
+                    source=source_id,
+                    message=data["content"],
+                    timestamp=datetime.datetime.fromisoformat(data["timestamp"]),
+                )
+            # if content != str, maybe encrpted ?????
+            # content == bytes than def encrypted ,
+            # either message, or pubkey
             self.print_data_routine()
 
     # * Validation
@@ -138,6 +187,8 @@ class MainController(threading.Thread):
 
         :param self:        Instances attributes
         :param ip:          Ip address
+
+        :return:            True if valid, False if not
         """
         try:
             socket.inet_aton(ip)
@@ -146,6 +197,14 @@ class MainController(threading.Thread):
             return False
 
     def validate_port(self, port) -> bool:
+        """
+        Validate port is it int?
+
+        :param self:        Instances attributes
+        :param port:        Port number
+
+        :return:            True if valid, False if not
+        """
         try:
             port = int(port)
             return True
@@ -153,14 +212,50 @@ class MainController(threading.Thread):
             return False
 
     # * Send to peer
-    def send_to_peer(self, data: str, timestamp: datetime.datetime):
+    def send_to_peer(self, data, timestamp: datetime.datetime):
+        """
+        Sending data to self.peer_connection, our peer
+        Data by default will be str or bytes
+        Str for raw message
+        Bytes for encrypted message & pubkey
+
+        :param self:        Attributes Instance
+        :param data:        Data to send
+        :param timestamp:   Timestamp when data created
+        """
+
         # here add timestamp
         # translate timestamp to iso
-        package_format = {"timestamp": timestamp.isoformat(), "content": data}
-        self.network_handler.send_to_node(package_format, self.peer_connection)
+
+        # data str is raw, no encryption
+        if isinstance(data, str):
+            package_format = {"timestamp": timestamp.isoformat(), "content": data}
+            self.network_handler.send_to_node(package_format, self.peer_connection)
+
+        # bytes can only be received from encryption class
+        # as encode_to_bytes function
+        elif isinstance(data, bytes):
+            # should it be further packed ?
+            package_format = {"timestamp": timestamp.isoformat(), "content": data}
+            self.network_handler.send_to_node(package_format, self.peer_connection)
+
+        # dict -> sending pubkey
+        # {timestamp: datetime.datetime
+        #  content  :
+        # }
 
     # * add Data_Buffer && data storage && text_buffer
     def add_data_buffer(self, source, message, timestamp=datetime.datetime.now()):
+        """
+        Add data to self.data_buffer
+        list of dict -> list<dict>
+
+        :param self:        Attributes Instance
+        :param source:      Source of the data, originator
+        :param message:     Message, data to display in view
+        :param timestamp:   Timestamp, default: now
+        """
+
         data = {
             "source": source,
             "timestamp": timestamp,
@@ -169,37 +264,86 @@ class MainController(threading.Thread):
         self.data_buffer.append(data)
 
     def update_data_storage(self):
+        """
+        Update self.data_storage
+        Data taken from data_buffer will be copied & sorted
+        Then added to the end of data_storage
+
+        :param self:        Attributes Instance
+        """
+
         if len(self.data_buffer) > 0:
             inter = self.data_buffer.copy()
             inter = self.quicksort_dict_in_list(inter)
             self.data_buffer = []
             self.data_storage = self.data_storage + inter
-            # && update_text_buffer
 
-    def update_text_buffer(self):
+    def update_text_buffer(self, amount=30):
+        """
+        Update text_buffer content
+        W/ data from data_stroage, translated to string form
+
+        :param self:        Attributes Instance
+        :param amount:      Amount of data to be processed
+        """
         self.text_buffer = []
-        for elm in self.data_storage:
+        for elm in self.data_storage.copy()[-1 * amount :]:
             self.text_buffer.append(self.create_text_from_data(elm))
 
     def reset_data_storage(self):
+        """
+        Reset data storage, empty it
+
+        :param self:        Attributes Instance
+        """
         self.data_storage = []
 
     def pop_data_storage(self, n: int):
+        """
+        Remove n amount of data
+        from self.data_storage
+
+        :param self:        Attributes Instance
+        :param n:           Amount of data to remove
+        """
+
         for i in range(n):
             self.data_storage.pop()
 
     def create_text_from_data(self, data: dict):
+        """
+        Format data to str
+        From data in data storage
+
+        :param self:        Attributes Instance
+        :param data:        Data that needed to be formated
+
+        :return:    Formatted str, from data:dict
+        """
+
         text = "[{}][{}]: {}".format(
             data["source"], data["timestamp"].strftime("%H:%M"), data["message"]
         )
         return text
 
     def print_data_routine(self):
+        """
+        Method to print data to UI
+
+        :param self:        Attributes Instance
+        """
+
         self.update_data_storage()
         self.update_text_buffer()
         self.terminal_ui.text_buffer = self.text_buffer
 
     def update_peer_ui(self, info=None):
+        """
+        Update peer id, to UI
+
+        :param self:        Attributes Instance
+        :param info:        peer id, default:None
+        """
         if info is not None:
             self.terminal_ui.update_peer_info(
                 self.terminal_ui.log_window_border, info=self.peer_id
@@ -209,11 +353,20 @@ class MainController(threading.Thread):
 
     # * NETWORKING
     def get_port(self):
-        # get port
+        """
+        Get port from user input
+
+        :param self:        Attributes Instance
+        """
         self.add_data_buffer(" sys ", message="Pick a port : ")
         self.print_data_routine()
 
     def start_network_handler(self):
+        """
+        Starting network handler, to handle networking
+
+        :param self:        Attributes Instance
+        """
         self.network_handler = NetworkHandler(
             self.host,
             self.port,
@@ -230,10 +383,20 @@ class MainController(threading.Thread):
 
     # * Thread
     def stop(self):
+        """
+        Stop this thread, preparation to quit
+
+        :param self:        Attributes Instance
+        """
+
         self.terminate_flag.set()
 
     def run(self):
-        # run
+        """
+        Main event loop for this class
+
+        :param self:        Attributes Instance
+        """
         self.terminal_ui.start()
 
         # Get uname
@@ -245,16 +408,25 @@ class MainController(threading.Thread):
         while not self.terminate_flag.is_set():
             self.print_data_routine()
 
+        # * Send stop request
         self.terminal_ui.stop()
         self.network_handler.stop()
 
-        time.sleep(5)
+        time.sleep(1)
 
+        # * When finished, join it
         self.terminal_ui.join()
-        self.network_handler.stop()
+        self.network_handler.join()
 
     # ? CALLBACK
     def user_input_handler(self, type, user_input):
+        """
+        Handle callback from terminal UI
+
+        :param self:        Attributes Instance
+        :param type:        type of callback called from terminal UI
+        :param user_input:  User input from terminal UI
+        """
         if self.counter == 0:
             self.username = self.process_username(user_input)
             self.counter = self.counter + 1
@@ -279,6 +451,16 @@ class MainController(threading.Thread):
             # print("user_input_callback: ", user_input)
 
     def network_callback_handler(self, callback_type, source_id, dest_id, data):
+        """
+        Handle callback from Network Handler
+
+        :param self:            Attributes Instance
+        :param callback_type:   type of callback called from Node
+        :param source_id:       source ID
+        :param dest_id:         destination ID
+        :param data:            data, that been sent from network handler
+
+        """
         # (callback_type, source_id, dest_id, data)
         match callback_type:
             case "server_started":
@@ -321,6 +503,15 @@ class MainController(threading.Thread):
 
     # * Utils
     def quicksort_dict_in_list(self, unsorted_list, key="timestamp") -> list:
+        """
+        Sort list with dict as element
+        Using Quicksort in ascending order
+
+        :param self:            Attributes Instance
+        :param unsorted_list:   list that is not sorted
+        :param key:             dict key, to be sorted
+        """
+
         # ! KEY MUST BE VALID
         # use quicksort
         if len(unsorted_list) > 1:
@@ -349,8 +540,3 @@ class MainController(threading.Thread):
         else:
             # Only one element, sorted
             return unsorted_list
-
-
-if __name__ == "__main__":
-    x = MainController()
-    print(x.process_username("ULAN5"))
