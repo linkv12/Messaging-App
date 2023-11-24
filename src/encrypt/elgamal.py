@@ -249,6 +249,16 @@ class ElGamal:
 
     # * UTILS
     def gcd(self, a, b):
+        """
+        Find greatest common divisor
+        From 2 number
+
+        :param self:        Attributes Instance
+        :param a:           int number
+        :param b:           int number
+
+        :return:            int, greatest common divisor
+        """
         if a < b:
             return self.gcd(b, a)
         elif a % b == 0:
