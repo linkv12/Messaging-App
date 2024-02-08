@@ -278,8 +278,6 @@ class MainController(threading.Thread):
                             self.pub_key_ending_bytes[enc_type]
                         )
 
-                        print(f"data: {data}")
-                        print(f"timestamp: {timestamp}")
                         pub_key = self.pub_key_unpacking[enc_type](data)
 
                         # so we now what our peer use as encryption
@@ -301,7 +299,6 @@ class MainController(threading.Thread):
                         if self.is_encrypted:
                             ciphers = self.encryption.unpack_encrypted_message(data)
                             message = self.encryption.decrypt(ciphers)
-                            print(f"DECRYPTED MESSAGE {message}")
 
                             self.add_data_buffer(
                                 source=source_id,
