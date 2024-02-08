@@ -5,6 +5,9 @@ import threading
 import time
 import uuid
 
+# tem[p]
+import json
+
 from src.encrypt.elgamal import ElGamal
 from src.termui import TerminalUi
 from src.network import NetworkHandler
@@ -49,6 +52,7 @@ class MainController(threading.Thread):
         self.is_encrypted = False
         self.encryption_message_flag = None
         self.encryption = None
+        self.encryption_type = None
         self.has_sent_pub_key = False
 
         self.peer_encryption_info = dict()  # peer_id, peer_encryption, peer_pubkey
@@ -57,6 +61,7 @@ class MainController(threading.Thread):
         # * Supported Encryption
         self.pub_key_ending_bytes = {"eg": bytes("5eg", "UTF-16")}
         self.pub_key_unpacking = {"eg": ElGamal.unpack_public_key}
+        self.message_ending_bytes = {"eg": bytes("2eg", "UTF-16")}
         self.encryption_function = {"eg": ElGamal.pack_to_bytes_message}
 
         # * Other component
@@ -115,6 +120,7 @@ class MainController(threading.Thread):
             encryption_candidate = user_input.split("!encrypt")[-1].strip()
             match encryption_candidate:
                 case "eg":
+                    self.encryption_type = "eg"
                     self.is_encrypted = True
                     self.encryption = ElGamal()
                     self.encryption_message_flag = (
@@ -140,20 +146,61 @@ class MainController(threading.Thread):
 
             online_status = self.is_online and self.have_peer
             if online_status and self.is_encrypted and not self.has_sent_pub_key:
-                public_key = self.encryption.pack_public_key()
-                self.send_to_peer(public_key, datetime.datetime.now())
+                packed_pub_key = (
+                    self.encryption.pack_public_key()
+                    + str.encode(timestamp.isoformat())
+                    + str.encode(self.encryption_type, "utf-8")
+                )
+                # print(type(packed_pub_key))
+                self.send_to_peer(packed_pub_key, timestamp)
+
+                #! DEBUG
+                # print(
+                #     "{} : SENDING ENCRYPTION KEYS, with content type [{}], content -> {}".format(
+                #         timestamp, str(type(packed_pub_key))[8:-2], packed_pub_key
+                #     )
+                # )
                 self.has_sent_pub_key = True
 
+                # print(public_key)
+
             if online_status:
+                # ALWAYS RETURN TRUE
                 if self.peer_id not in self.peer_encryption_info.keys():
                     self.send_to_peer(user_input, timestamp)
+                    #! DEBUG
+                    # print(
+                    #     "{} : SENDING PLAIN TEXT,  with content type [{}], content -> {}".format(
+                    #         timestamp, str(type(user_input))[8:-2], user_input
+                    #     )
+                    # )
                 else:
                     # which mean other have use encryption
                     peer_pub_key = self.peer_encryption_info[self.peer_id]["public_key"]
                     encrypt_message = self.peer_encryption_info[self.peer_id][
                         "encryption_function"
                     ](user_input, peer_pub_key)
-                    self.send_to_peer(encrypt_message, timestamp)
+
+                    #  self.peer_encryption_info[self.peer_id]["encryption_type"]
+
+                    enc_type = self.peer_encryption_info[self.peer_id][
+                        "encryption_type"
+                    ]
+                    #! DEBUG
+                    # print(f"CROC {enc_type}")
+                    packed_enc_message = (
+                        encrypt_message
+                        + str.encode(timestamp.isoformat(), "utf-8")
+                        + str.encode(enc_type, "utf-8")
+                    )
+                    self.send_to_peer(packed_enc_message, timestamp)
+
+                    #! DEBUG
+                    # print(
+                    #     "{} : SENDING ENCRYPTED DATA,  with content type [{}], content -> {}".format(
+                    #         timestamp, str(type(encrypt_message))[8:-2], encrypt_message
+                    #     )
+                    # )
 
                 # if encryption != None , then process it accordingly
 
@@ -195,74 +242,109 @@ class MainController(threading.Thread):
 
         return port
 
-    def process_network_message(self, source_id, dest_id, data):
+    def process_network_message(self, source_id, dest_id, network_data):
         """
         Process data from our peer
 
-        :param self:            Attributes Instance
-        :param source_id:       Id of our peer, the sender
-        :param dest_id:         Our Id, the receiver
-        :param data:            Data that is sent
+        :param self:                    Attributes Instance
+        :param source_id:               Id of our peer, the sender
+        :param dest_id:                 Our Id, the receiver
+        :param network_data:            Data that is sent
         """
 
-        if isinstance(data, bytes):
+        if isinstance(network_data, bytes):
             # further processing, for example encryption
-            pass
-        elif isinstance(data, str):
-            self.add_data_buffer(source=source_id, message=str(data))
+            #! DEBUG
+            # print("FOUND some BYTES")
+
+            # get last two bytes -> encryption type
+            data, enc_type = network_data[:-2], network_data[-2:]
+
+            # identyfy
+            enc_type = bytes.decode(enc_type, "utf-8")
+
+            #! DEBUG
+            # print(f"DATA : {data}")
+            # print(f"ENCRYPTION TYPE : {enc_type}")
+
+            match enc_type:
+                case "eg":
+                    # check pub_key, enc_message
+                    if self.pub_key_ending_bytes[enc_type] in data:
+                        #! DEBUG
+                        # print("KEY RECEIVED")
+
+                        data, timestamp = data.split(
+                            self.pub_key_ending_bytes[enc_type]
+                        )
+
+                        print(f"data: {data}")
+                        print(f"timestamp: {timestamp}")
+                        pub_key = self.pub_key_unpacking[enc_type](data)
+
+                        # so we now what our peer use as encryption
+                        self.peer_encryption_info[source_id] = {
+                            "encryption_type": "eg",
+                            "public_key": pub_key,
+                            "encryption_function": self.encryption_function[enc_type],
+                        }
+                    elif self.message_ending_bytes[enc_type] in data:
+                        #! DEBUG
+                        # print("MESSAGE RECEIVED")
+
+                        data, timestamp = data.split(
+                            self.message_ending_bytes[enc_type]
+                        )
+
+                        timestamp = bytes.decode(timestamp)
+
+                        if self.is_encrypted:
+                            ciphers = self.encryption.unpack_encrypted_message(data)
+                            message = self.encryption.decrypt(ciphers)
+                            print(f"DECRYPTED MESSAGE {message}")
+
+                            self.add_data_buffer(
+                                source=source_id,
+                                message=message,
+                                timestamp=datetime.datetime.fromisoformat(timestamp),
+                            )
+                        else:
+                            print("Unknown bytes, we are not using encryption")
+
+                    # self.pub_key_unpacking = {"eg": ElGamal.unpack_public_key}
+
+                case _:
+                    self.add_data_buffer(
+                        source=" sys ", message="Unidentified encrypted message"
+                    )
+        elif isinstance(network_data, str):
+            self.add_data_buffer(source=source_id, message=str(network_data))
 
         # Default send to peer data type
         # but some error might occur and recv other type
-        elif isinstance(data, dict):
+        elif isinstance(network_data, dict):
+            #! DEBUG
+            # print(type(network_data), type(network_data["content"]))
+            t = network_data["timestamp"]
+            d = str(type(network_data["content"]))[8:-2]
+            cont = network_data["content"]
+            # print(f"{t} : Receving dict, with content type [{d}], content -> {cont} ")
+
             # anticipate if data send to peer is str or other
-            if isinstance(data["content"], str):
+            if isinstance(network_data["content"], str):
+                # cont = network_data["content"]
+
+                # print(f"{t} : Receving dict, with content type str")
                 self.add_data_buffer(
                     source=source_id,
-                    message=data["content"],
-                    timestamp=datetime.datetime.fromisoformat(data["timestamp"]),
+                    message=network_data["content"],
+                    timestamp=datetime.datetime.fromisoformat(
+                        network_data["timestamp"]
+                    ),
                 )
             # if content != str, maybe encrpted ?????
             # content == bytes than def encrypted ,
             # either message, or pubkey
-            elif isinstance(data["content"], bytes):
-                # what is this either pubkey or enc, message
-                # check if it key or mess
-
-                if self.encryption_message_flag is not None:
-                    is_message_for_us = data["content"].endswith(
-                        self.encryption_message_flag
-                    )
-                else:
-                    is_message_for_us = False
-                # are we use encryption ?
-                if self.is_encrypted and is_message_for_us:
-                    # check ending
-
-                    ciphers = self.encryption.unpack_encrypted_message(data["content"])
-                    message = self.encryption.decrypt(ciphers)
-
-                    self.add_data_buffer(
-                        source=source_id,
-                        message=message,
-                        timestamp=datetime.datetime.fromisoformat(data["timestamp"]),
-                    )
-                else:
-                    # probably pubkey exchange
-                    encryption_type = None
-                    for type, bytes_value in self.pub_key_ending_bytes.items():
-                        if data["content"].endswith(bytes_value):
-                            encryption_type = type
-
-                    # unpack pub_key
-                    pub_key = self.pub_key_unpacking[encryption_type](data["content"])
-
-                    # so we now what our peer use as encryption
-                    self.peer_encryption_info[source_id] = {
-                        "public_key": pub_key,
-                        "encryption_function": self.encryption_function[
-                            encryption_type
-                        ],
-                    }
 
             self.print_data_routine()
 
@@ -322,8 +404,12 @@ class MainController(threading.Thread):
         # as encode_to_bytes function
         elif isinstance(data, bytes):
             # should it be further packed ?
-            package_format = {"timestamp": timestamp.isoformat(), "content": data}
-            self.network_handler.send_to_node(package_format, self.peer_connection)
+
+            # print(json.loads(data))
+            # package_format = {"timestamp": timestamp.isoformat(), "content": data}
+
+            # HERE NEED TO BE BYTES not
+            self.network_handler.send_to_node(data, self.peer_connection)
 
         # dict -> sending pubkey
         # {timestamp: datetime.datetime

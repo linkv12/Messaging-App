@@ -74,7 +74,7 @@ class NodeConnection(threading.Thread):
                 self.terminate_flag.set()
                 self.main_node.debug_print("Unexpected Error: {}".format(str(e)))
 
-            if chunk is not b"":
+            if chunk != b"":
                 buffer += chunk
                 eot_pos = buffer.find(self.EOT_CHAR)
 
@@ -183,6 +183,10 @@ class NodeConnection(threading.Thread):
             except json.decoder.JSONDecodeError:
                 # this should be str
                 return packet_decoded
+
+            except UnicodeDecodeError:
+                # this is bytes
+                return packet
 
         # * If its not encoded with utf-8
         # * Means it serious data

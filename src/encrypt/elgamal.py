@@ -155,7 +155,7 @@ class ElGamal:
         """
         # calculate shared key
         cipher_1, cipher_2 = ciphers
-        shared_secret = self.power(cipher_1, self.private_key, self.public_modulo)
+        shared_secret = pow(cipher_1, self.private_key, self.public_modulo)
 
         msg = ""
         for i in range(0, len(cipher_2)):
@@ -192,7 +192,11 @@ class ElGamal:
         """
         # still contain pub_key_bytes,
         # already verified ending with b""5eg"
-        encoded_pub_key = encoded_pub_key[:-8].decode(encoding)
+        encoded_pub_key = encoded_pub_key.decode(encoding)
+        #! DEBUG
+        # print("ENC PUB KEY", encoded_pub_key)
+        # print(type(encoded_pub_key))
+
         pub_key = json.loads(encoded_pub_key)
         return pub_key
 
@@ -228,7 +232,7 @@ class ElGamal:
         :return:                    ciphers
         """
         # does it need to be class method instead of using instance method?
-        packed_ciphers = packed_ciphers[:-8].decode(encoding)
+        packed_ciphers = packed_ciphers.decode(encoding)
         ciphers = json.loads(packed_ciphers)
         return ciphers
 
